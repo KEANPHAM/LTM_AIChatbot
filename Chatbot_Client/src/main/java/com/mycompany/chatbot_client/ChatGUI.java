@@ -1,14 +1,42 @@
 package com.mycompany.chatbot_client;
 
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridLayout;
+import java.awt.RenderingHints;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+import javax.swing.Timer;
+import javax.swing.border.EmptyBorder;
 
 public class ChatGUI extends JFrame {
     private String username;
@@ -429,12 +457,27 @@ public class ChatGUI extends JFrame {
             @Override
             protected String doInBackground() throws Exception {
                 try (Socket socket = new Socket("localhost", 8888)) {
-                    socket.setSoTimeout(15000); 
+                    socket.setSoTimeout(300000); 
                     
                     DataOutputStream out = new DataOutputStream(socket.getOutputStream());
                     DataInputStream in = new DataInputStream(socket.getInputStream());
 
-                    String rawMessage = "CHAT|" + username + "|" + command;
+                    String cmd = command.toUpperCase();
+
+                    String rawMessage;
+
+                    if (cmd.startsWith("WEATHER|")) {
+                        rawMessage = "WEATHER|" + username + "|" + command.substring(8);
+                    }
+                    else if (cmd.startsWith("IP|")) {
+                        rawMessage = "IP|" + username + "|" + command.substring(3);
+                    }
+                    else if (cmd.startsWith("PORT|")) {
+                        rawMessage = "PORT|" + username + "|" + command.substring(5);
+                    }
+                    else {
+                        rawMessage = "CHAT|" + username + "|" + command;
+                    }
                     
                     String encryptedMessage = AESUtil.encrypt(rawMessage);
                     out.writeUTF(encryptedMessage);
@@ -443,9 +486,9 @@ public class ChatGUI extends JFrame {
                     return AESUtil.decrypt(encryptedResponse);
 
                 } catch (java.net.ConnectException ce) {
-                    return "ERROR: Không thể kết nối. Server của Hưng chưa bật hoặc sai Port!";
+                    return "ERROR: Không thể kết nối. Server  chưa bật hoặc sai Port!";
                 } catch (java.net.SocketTimeoutException te) {
-                    return "ERROR: Quá 15 giây không nhận được phản hồi (Timeout).";
+                    return "ERROR: Quá 5 phút không nhận được phản hồi (Timeout).";
                 } catch (Exception ex) {
                     return "ERROR: Lỗi mạng hoặc giải mã: " + ex.getMessage();
                 }
