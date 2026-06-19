@@ -1,15 +1,15 @@
 package com.mycompany.chatbot_server;
 
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.io.OutputStream;
 import java.util.Scanner;
 
 public class Chatbot_Server {
@@ -121,7 +121,7 @@ public class Chatbot_Server {
         for (int port = startPort; port <= endPort; port++) {
             try {
                 Socket socket = new Socket();
-                socket.connect(new java.net.InetSocketAddress(ip, port), 200);
+                socket.connect(new java.net.InetSocketAddress(ip, port), 100);
                 socket.close(); 
                 
                 openPorts.append(port).append(", ");
@@ -154,13 +154,18 @@ public class Chatbot_Server {
                 System.out.println("Server nhan duoc chuoi ma hoa: " + messageTuClient);
 
                 String thongDiepThat = AESUtil.decrypt(messageTuClient);
+                System.out.println("Nhan duoc: [" + thongDiepThat + "]");
                 System.out.println("Noi dung Client gui: " + thongDiepThat);
 
                 String cauTraLoi = "";
 
                // === 1. XỬ LÝ LỆNH WEATHER ===
                 if (thongDiepThat.toUpperCase().startsWith("WEATHER|")) {
-                    String tenThanhPho = thongDiepThat.substring(8).trim(); 
+                    System.out.println("DA VAO WEATHER");
+                    String[] parts = thongDiepThat.split("\\|", 3);
+
+                    String username = parts[1];
+                    String tenThanhPho = parts[2];
                     String thanhPhoKhongDau = removeAccents(tenThanhPho);
                     System.out.println("Client muon xem thoi tiet o: " + thanhPhoKhongDau);
                     
@@ -206,20 +211,30 @@ public class Chatbot_Server {
                 }
                 // === 2. XỬ LÝ LỆNH CHAT ===
                 else if (thongDiepThat.toUpperCase().startsWith("CHAT|")) {
-                    String cauHoi = thongDiepThat.substring(5); 
-                    cauTraLoi = goiAI(cauHoi); 
+                   String[] parts = thongDiepThat.split("\\|", 3);
+
+                    String username = parts[1];
+                    String cauHoi = parts[2];
+
+                    cauTraLoi = goiAI(cauHoi);
                 } 
                 // === 3. XỬ LÝ LỆNH PORT ===
                 else if (thongDiepThat.toUpperCase().startsWith("PORT|")) {
                     try {
-                        String data = thongDiepThat.substring(5).trim();
-                        String[] parts = data.split("\\s+");
+                        String[] parts = thongDiepThat.split("\\|", 3);
+
+                        String username = parts[1];
+                        String data = parts[2];
+                                                
                         
-                        if (parts.length == 3) {
-                            String ip = parts[0];
-                            int startPort = Integer.parseInt(parts[1]);
-                            int endPort = Integer.parseInt(parts[2]);
-                            cauTraLoi = scanPort(ip, startPort, endPort);
+                     String[] portParts = data.split("\\s+");
+
+                    if (portParts.length == 3) {
+                        String ip = portParts[0];
+                        int startPort = Integer.parseInt(portParts[1]);
+                        int endPort = Integer.parseInt(portParts[2]);
+
+                        cauTraLoi = scanPort(ip, startPort, endPort);
                         } else {
                             cauTraLoi = "Sai cú pháp! Vui lòng nhập: PORT|192.168.1.1 1 1000";
                         }
@@ -232,7 +247,10 @@ public class Chatbot_Server {
                 // === 4. XỬ LÝ LỆNH IP ===
                 else if (thongDiepThat.toUpperCase().startsWith("IP|")) {
                     try {
-                        String ip = thongDiepThat.substring(3).trim();
+                        String[] parts = thongDiepThat.split("\\|", 3);
+
+                        String username = parts[1];
+                        String ip = parts[2];
                         String urlString = "http://ip-api.com/json/" + ip + "?lang=vi";
                         
                         java.net.URL url = new java.net.URL(urlString);
