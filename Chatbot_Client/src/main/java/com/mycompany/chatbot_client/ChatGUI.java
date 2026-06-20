@@ -486,7 +486,7 @@ private String buildProtocolMessage(String rawInput) {
                     return conn.sendCommand(rawMessage);
 
                 } catch (java.net.SocketTimeoutException te) {
-                    return "ERROR: Quá 15 giây không nhận được phản hồi (Timeout).";
+                    return "ERROR: Quá 5 phút không nhận được phản hồi (Timeout).";
                 } catch (Exception ex) {
                     return "ERROR: Lỗi mạng hoặc giải mã: " + ex.getClass().getSimpleName() + " - " + ex.getMessage();
                 }
