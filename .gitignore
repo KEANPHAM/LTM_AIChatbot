@@ -1,8 +1,7 @@
 # =====================================================================
 # Không commit file chứa key thật lên Git
 # =====================================================================
-Chatbot_Server/config.properties
-Chatbot_Client/config.properties
+
 
 # =====================================================================
 # Thư mục build / file biên dịch (NetBeans + Maven)
