@@ -3,58 +3,82 @@ package com.mycompany.chatbot_server;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.Arrays;
 
+/**
+ * AESUtil - Mã hóa/giải mã AES.
+ *
+ * THAY ĐỔI SO VỚI BẢN CŨ:
+ *  1. Key không còn hardcode "LTMTopic7Chatbot" trong source nữa.
+ *     -> Lấy qua ConfigLoader.get(ConfigLoader.AES_SECRET_KEY), đọc từ file
+ *        config.properties hoặc biến môi trường (không commit lên Git).
+ *  2. Đổi từ "AES" (mặc định = AES/ECB/PKCS5Padding - mode KHÔNG an toàn,
+ *     dữ liệu giống nhau sẽ mã hóa ra cùng 1 kết quả, dễ lộ pattern)
+ *     sang "AES/CBC/PKCS5Padding" có vector khởi tạo (IV) ngẫu nhiên mỗi
+ *     lần mã hóa -> cùng nội dung nhưng mỗi lần mã hóa ra kết quả khác nhau.
+ *
+ * LƯU Ý: Client và Server vẫn phải dùng chung 1 SECRET_KEY (symmetric),
+ * key đó giờ nằm trong config.properties của từng máy, KHÔNG nằm trong code.
+ */
 public class AESUtil {
-    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
-    
-    // Yêu cầu 26: Lấy key trực tiếp từ ConfigLoader của Leader, KHÔNG dùng System.getenv() ở đây
-    private static byte[] getKeyBytes() {
-        // Giả sử ConfigLoader.AES_SECRET_KEY là String. Cần đảm bảo độ dài 16, 24 hoặc 32 bytes
-        String secretKey = ConfigLoader.AES_SECRET_KEY; 
-        return Arrays.copyOf(secretKey.getBytes(), 16); // Cắt/Pad về 16 bytes (128 bit) cho an toàn
+
+    private static final String TRANSFORMATION = "AES/CBC/PKCS5Padding";
+    private static final int IV_LENGTH_BYTES = 16; // AES block size = 16 byte
+
+    // Lấy key 1 lần khi class được load, không hardcode trong code nữa
+    private static SecretKeySpec getKey() {
+        String secret = ConfigLoader.get(ConfigLoader.AES_SECRET_KEY);
+        // AES key hợp lệ phải đúng 16/24/32 byte (128/192/256-bit).
+        // Đồ án dùng key 16 ký tự UTF-8 => AES-128.
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length != 16 && keyBytes.length != 24 && keyBytes.length != 32) {
+            throw new IllegalArgumentException(
+                    "AES_SECRET_KEY phai dai 16, 24 hoac 32 byte (hien tai: "
+                    + keyBytes.length + " byte). Kiem tra lai file config.properties.");
+        }
+        return new SecretKeySpec(keyBytes, "AES");
     }
 
-    public static String encrypt(String plainText) throws Exception {
-        byte[] clean = plainText.getBytes("UTF-8");
-        
-        // Sinh ngẫu nhiên 16 bytes IV
-        byte[] iv = new byte[16];
+    // Hàm Mã hóa (Encrypt) - sinh IV ngẫu nhiên, ghép IV vào trước ciphertext
+    public static String encrypt(String data) throws Exception {
+        SecretKeySpec key = getKey();
+
+        byte[] iv = new byte[IV_LENGTH_BYTES];
         new SecureRandom().nextBytes(iv);
         IvParameterSpec ivSpec = new IvParameterSpec(iv);
-        SecretKeySpec secretKey = new SecretKeySpec(getKeyBytes(), "AES");
 
-        Cipher cipher = Cipher.getInstance(ALGORITHM);
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
-        byte[] encrypted = cipher.doFinal(clean);
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, key, ivSpec);
 
-        // Ghép IV và CipherText lại: [IV (16 bytes)] + [CipherText]
-        byte[] encryptedWithIv = new byte[iv.length + encrypted.length];
-        System.arraycopy(iv, 0, encryptedWithIv, 0, iv.length);
-        System.arraycopy(encrypted, 0, encryptedWithIv, iv.length, encrypted.length);
+        byte[] encryptedBytes = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
 
-        return Base64.getEncoder().encodeToString(encryptedWithIv);
+        // Ghép IV + dữ liệu mã hóa thành 1 mảng byte duy nhất để gửi đi,
+        // bên nhận sẽ tách IV ra lại trước khi giải mã.
+        byte[] combined = new byte[iv.length + encryptedBytes.length];
+        System.arraycopy(iv, 0, combined, 0, iv.length);
+        System.arraycopy(encryptedBytes, 0, combined, iv.length, encryptedBytes.length);
+
+        return Base64.getEncoder().encodeToString(combined);
     }
 
-    public static String decrypt(String encryptedTextBase64) throws Exception {
-        byte[] encryptedWithIv = Base64.getDecoder().decode(encryptedTextBase64);
+    // Hàm Giải mã (Decrypt) - tách IV ra khỏi phần đầu trước khi giải mã
+    public static String decrypt(String encryptedData) throws Exception {
+        SecretKeySpec key = getKey();
 
-        // Tách 16 bytes đầu làm IV
-        byte[] iv = new byte[16];
-        System.arraycopy(encryptedWithIv, 0, iv, 0, iv.length);
+        byte[] combined = Base64.getDecoder().decode(encryptedData);
+
+        byte[] iv = new byte[IV_LENGTH_BYTES];
+        byte[] encryptedBytes = new byte[combined.length - IV_LENGTH_BYTES];
+        System.arraycopy(combined, 0, iv, 0, IV_LENGTH_BYTES);
+        System.arraycopy(combined, IV_LENGTH_BYTES, encryptedBytes, 0, encryptedBytes.length);
+
         IvParameterSpec ivSpec = new IvParameterSpec(iv);
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
 
-        // Phần còn lại là CipherText
-        byte[] encrypted = new byte[encryptedWithIv.length - iv.length];
-        System.arraycopy(encryptedWithIv, iv.length, encrypted, 0, encrypted.length);
-
-        SecretKeySpec secretKey = new SecretKeySpec(getKeyBytes(), "AES");
-        Cipher cipher = Cipher.getInstance(ALGORITHM);
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec);
-
-        byte[] decrypted = cipher.doFinal(encrypted);
-        return new String(decrypted, "UTF-8");
+        byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
+        return new String(decryptedBytes, StandardCharsets.UTF_8);
     }
 }

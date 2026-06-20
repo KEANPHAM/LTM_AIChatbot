@@ -1,14 +1,39 @@
 package com.mycompany.chatbot_client;
 
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import java.awt.*;
-import java.awt.event.*;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.net.Socket;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridLayout;
+import java.awt.RenderingHints;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+import javax.swing.Timer;
+import javax.swing.border.EmptyBorder;
 
 public class ChatGUI extends JFrame {
     private String username;
@@ -267,6 +292,9 @@ public class ChatGUI extends JFrame {
             @Override public void mouseExited(MouseEvent e) { signoutItem.setOpaque(false); signoutItem.repaint(); }
             @Override public void mouseClicked(MouseEvent e) {
                 userMenu.setVisible(false);
+                // SỬA: đóng luôn Socket dùng chung khi đăng xuất, để lần Login
+                // sau (nếu đổi user khác) sẽ mở 1 kết nối/session mới sạch sẽ.
+                ServerConnection.getInstance().disconnect();
                 dispose(); 
                 new LoginFrame().setVisible(true); 
             }
@@ -408,7 +436,26 @@ public class ChatGUI extends JFrame {
             vertical.setValue(vertical.getMaximum());
         });
     }
+// Nhận diện các lệnh đặc biệt (WEATHER|, PORT|, IP|) và giữ nguyên cú pháp gốc
+// để gửi thẳng cho server. Nếu không khớp lệnh nào -> mặc định là CHAT với AI.
+private String buildProtocolMessage(String rawInput) {
+    String trimmed = rawInput.trim();
+    int pipeIndex = trimmed.indexOf('|');
 
+    if (pipeIndex > 0) {
+        String keyword = trimmed.substring(0, pipeIndex).trim().toUpperCase();
+        String rest = trimmed.substring(pipeIndex); // giữ nguyên dấu | + phần sau
+
+        switch (keyword) {
+            case "WEATHER":
+            case "PORT":
+            case "IP":
+                return keyword + rest;
+        }
+    }
+
+    return "CHAT|" + username + "|" + trimmed;
+}
     private void handleSendMessage(ActionEvent e) {
         String command = txtInput.getText();
         String emptyError = InputValidator.validateEmpty(command);
@@ -428,28 +475,22 @@ public class ChatGUI extends JFrame {
         SwingWorker<String, Void> worker = new SwingWorker<>() {
             @Override
             protected String doInBackground() throws Exception {
-                try (Socket socket = new Socket("localhost", 8888)) {
-                    socket.setSoTimeout(15000); 
-                    
-                    DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                    DataInputStream in = new DataInputStream(socket.getInputStream());
+                try {
+                    ServerConnection conn = ServerConnection.getInstance();
 
-                    String rawMessage = "CHAT|" + username + "|" + command;
-                    
-                    String encryptedMessage = AESUtil.encrypt(rawMessage);
-                    out.writeUTF(encryptedMessage);
+                    if (!conn.isConnected()) {
+                        return "ERROR: Mất kết nối tới Server. Vui lòng đăng nhập lại!";
+                    }
 
-                    String encryptedResponse = in.readUTF();
-                    return AESUtil.decrypt(encryptedResponse);
+                    String rawMessage = buildProtocolMessage(command);
+                    return conn.sendCommand(rawMessage);
 
-                } catch (java.net.ConnectException ce) {
-                    return "ERROR: Không thể kết nối. Server của Hưng chưa bật hoặc sai Port!";
                 } catch (java.net.SocketTimeoutException te) {
                     return "ERROR: Quá 15 giây không nhận được phản hồi (Timeout).";
                 } catch (Exception ex) {
-                    return "ERROR: Lỗi mạng hoặc giải mã: " + ex.getMessage();
+                    return "ERROR: Lỗi mạng hoặc giải mã: " + ex.getClass().getSimpleName() + " - " + ex.getMessage();
                 }
-            }
+}
 
             @Override
             protected void done() {

@@ -1,15 +1,35 @@
 package com.mycompany.chatbot_client;
 
-import javax.swing.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
+import javax.swing.SwingWorker;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
-import java.awt.*;
-import java.awt.event.*;
 
 public class LoginFrame extends JFrame {
     private JTextField txtUsername;
     private JPasswordField txtPassword;
     private JLabel lblError;
+    private JButton btnLogin;
 
     private final Color bgColor = new Color(30, 30, 30);
     private final Color fgColor = new Color(220, 220, 220);
@@ -48,7 +68,7 @@ public class LoginFrame extends JFrame {
         mainPanel.add(createInputWrapper("Password:", txtPassword, font));
         mainPanel.add(Box.createRigidArea(new Dimension(0, 25)));
 
-        JButton btnLogin = new JButton("ĐĂNG NHẬP");
+        btnLogin = new JButton("ĐĂNG NHẬP");
         btnLogin.setUI(new javax.swing.plaf.basic.BasicButtonUI()); // Fix lỗi nút trắng của Windows
         btnLogin.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnLogin.setBackground(accentColor);
@@ -90,17 +110,78 @@ public class LoginFrame extends JFrame {
             @Override public void mouseExited(MouseEvent e) { lblRegisterLink.setForeground(new Color(150, 150, 150)); }
         });
 
-        btnLogin.addActionListener((ActionEvent e) -> {
-            String user = txtUsername.getText();
-            boolean loginSuccess = true; 
-            if (loginSuccess) {
-                this.dispose(); 
-                new ChatGUI(user).setVisible(true); 
-            } else {
-                lblError.setText("⚠ Sai tài khoản hoặc mật khẩu!");
-            }
-        });
+        btnLogin.addActionListener(this::handleLogin);
+        // Cho phép nhấn Enter ở ô password để đăng nhập luôn, tiện khi test
+        txtPassword.addActionListener(this::handleLogin);
+
         setLocationRelativeTo(null);
+    }
+
+    /**
+     * SỬA: Không còn giả lập "loginSuccess = true" ở Client nữa.
+     * Giờ gửi LOGIN|user|pass THẬT lên Server, qua ServerConnection
+     * (mở 1 Socket sống xuyên suốt session, dùng lại cho ChatGUI sau này).
+     * Dùng SwingWorker để không làm treo giao diện trong lúc chờ Server.
+     */
+    private void handleLogin(ActionEvent e) {
+        String user = txtUsername.getText().trim();
+        String pass = new String(txtPassword.getPassword());
+
+        if (user.isEmpty() || pass.isEmpty()) {
+            lblError.setText("⚠ Vui lòng nhập đầy đủ Username và Password!");
+            return;
+        }
+
+        btnLogin.setEnabled(false);
+        lblError.setForeground(new Color(255, 85, 85));
+        lblError.setText("Đang kết nối tới Server...");
+
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                try {
+                    ServerConnection conn = ServerConnection.getInstance();
+                    conn.connect(); // mở Socket (nếu chưa có), giữ sống cho cả session
+
+                    String rawMessage = "LOGIN|" + user + "|" + pass;
+                    return conn.sendCommand(rawMessage); // ví dụ trả về "LOGIN_RESULT|OK"
+
+                } catch (java.net.ConnectException ce) {
+                    return "ERROR|Không thể kết nối tới Server. Server chưa bật hoặc sai Port!";
+                } catch (java.net.SocketTimeoutException te) {
+                    return "ERROR|Quá thời gian chờ phản hồi từ Server (Timeout).";
+                } catch (Exception ex) {
+                    return "ERROR|Lỗi mạng hoặc giải mã: " + ex.getClass().getSimpleName() + " - " + ex.getMessage();
+                }
+            }
+
+            @Override
+            protected void done() {
+                btnLogin.setEnabled(true);
+                try {
+                    String result = get();
+
+                    if (result.startsWith("LOGIN_RESULT|OK")) {
+                        lblError.setText(" ");
+                        LoginFrame.this.dispose();
+                        new ChatGUI(user).setVisible(true);
+
+                    } else if (result.startsWith("LOGIN_RESULT|FAIL")) {
+                        lblError.setText("⚠ Sai tài khoản hoặc mật khẩu!");
+
+                    } else if (result.startsWith("ERROR|")) {
+                        lblError.setText("⚠ " + result.substring("ERROR|".length()));
+
+                    } else {
+                        lblError.setText("⚠ Phản hồi không hợp lệ từ Server: " + result);
+                    }
+                } catch (Exception ex) {
+                    lblError.setText("⚠ Lỗi xử lý phản hồi: " + ex.getMessage());
+                }
+            }
+        };
+
+        worker.execute();
     }
 
     // Hàm bọc giúp chữ và ô nhập luôn dính sát mép trái
