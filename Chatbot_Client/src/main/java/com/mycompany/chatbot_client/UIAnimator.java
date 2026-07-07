@@ -13,23 +13,17 @@ public class UIAnimator {
         comp.addMouseListener(new MouseAdapter() {
             Timer fadeTimer;
             @Override
-            public void mouseEntered(MouseEvent e) {
-                animateColor(hoverColor);
-            }
+            public void mouseEntered(MouseEvent e) { animateColor(hoverColor); }
             @Override
-            public void mouseExited(MouseEvent e) {
-                animateColor(defaultColor);
-            }
+            public void mouseExited(MouseEvent e) { animateColor(defaultColor); }
 
             private void animateColor(Color targetColor) {
                 if (fadeTimer != null && fadeTimer.isRunning()) fadeTimer.stop();
-                
                 fadeTimer = new Timer(15, event -> {
                     Color current = comp.getBackground();
                     int r = step(current.getRed(), targetColor.getRed());
                     int g = step(current.getGreen(), targetColor.getGreen());
                     int b = step(current.getBlue(), targetColor.getBlue());
-                    
                     comp.setBackground(new Color(r, g, b));
                     if (r == targetColor.getRed() && g == targetColor.getGreen() && b == targetColor.getBlue()) {
                         fadeTimer.stop();
@@ -37,10 +31,9 @@ public class UIAnimator {
                 });
                 fadeTimer.start();
             }
-
             private int step(int current, int target) {
-                if (current < target) return Math.min(current + 8, target);
-                if (current > target) return Math.max(current - 8, target);
+                if (current < target) return Math.min(current + 12, target);
+                if (current > target) return Math.max(current - 12, target);
                 return current;
             }
         });
