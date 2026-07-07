@@ -4,34 +4,30 @@ import java.awt.Color;
 import java.awt.Font;
 
 public class ThemeManager {
-    public static boolean isDarkMode = true; // Mặc định là Dark Mode
+    public static final Font FONT_REGULAR = new Font("Segoe UI", Font.PLAIN, 15);
+    public static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 16);
 
-    // Font chữ chủ đạo
-    public static final Font FONT_REGULAR = new Font("Segoe UI", Font.PLAIN, 14);
-    public static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 18);
-
-    // Lấy màu nền chính
     public static Color getBgColor() {
-        return isDarkMode ? new Color(20, 20, 20) : new Color(250, 250, 250);
+        return new Color(255, 255, 255); // #FFFFFF
     }
     
-    // Lấy màu nền cho các Panel/Input nổi (Floating element)
     public static Color getSurfaceColor() {
-        return isDarkMode ? new Color(40, 40, 40) : new Color(255, 255, 255);
+        return new Color(248, 249, 250); // #F8F9FA (Card, Floating box)
     }
 
-    // Lấy màu chữ chính
-    public static Color getTextColor() {
-        return isDarkMode ? new Color(230, 230, 230) : new Color(30, 30, 30);
+    public static Color getBorderColor() {
+        return new Color(229, 231, 235); // #E5E7EB
     }
 
-    // Lấy màu chữ phụ (mờ hơn)
-    public static Color getSubTextColor() {
-        return isDarkMode ? new Color(150, 150, 150) : new Color(100, 100, 100);
-    }
-
-    // Màu nhấn (Accent color) - Xanh lam hiện đại
     public static Color getAccentColor() {
-        return new Color(26, 115, 232); 
+        return new Color(59, 130, 246); // #3B82F6 (Màu chính)
+    }
+
+    public static Color getTextColor() {
+        return new Color(17, 24, 39); // #111827 (Text chính)
+    }
+
+    public static Color getSubTextColor() {
+        return new Color(107, 114, 128); // #6B7280 (Text phụ)
     }
 }

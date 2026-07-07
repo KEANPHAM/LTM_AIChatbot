@@ -7,8 +7,6 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
@@ -22,7 +20,6 @@ import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingWorker;
-import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 
 public class LoginFrame extends JFrame {
@@ -31,118 +28,94 @@ public class LoginFrame extends JFrame {
     private JLabel lblError;
     private JButton btnLogin;
 
-  
     public LoginFrame() {
-        setTitle("AI Chatbot - Login");
-        setSize(400, 430); 
+        setTitle("Đăng nhập");
+        setSize(400, 460); 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        getContentPane().setBackground(ThemeManager.getBgColor());
+        
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBorder(new EmptyBorder(30, 40, 30, 40));
-        mainPanel.setBackground(ThemeManager.getBgColor());
+        mainPanel.setBorder(new EmptyBorder(40, 40, 40, 40));
+        mainPanel.setOpaque(false);
 
-        Font font = new Font("Segoe UI", Font.PLAIN, 14);
-
-        JLabel lblTitle = new JLabel("ĐĂNG NHẬP HỆ THỐNG");
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        JLabel lblTitle = new JLabel("ĐĂNG NHẬP");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
         lblTitle.setForeground(ThemeManager.getTextColor());
         lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        mainPanel.add(lblTitle);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 30)));
-
-
-        // Gói ô nhập liệu vào Panel để căn lề trái thẳng tắp (Đây là code cũ của bạn)
-        txtUsername = new JTextField();
-        styleInput(txtUsername, font);
-        mainPanel.add(createInputWrapper("Username:", txtUsername, font));
         
-        txtPassword = new JPasswordField();
-        styleInput(txtPassword, font);
-        mainPanel.add(createInputWrapper("Password:", txtPassword, font));
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 25)));
-
+        txtUsername = createFloatingInput();
+        txtPassword = createFloatingPassword();
+        
         btnLogin = new JButton("ĐĂNG NHẬP");
-        btnLogin.setUI(new javax.swing.plaf.basic.BasicButtonUI()); // Fix lỗi nút trắng của Windows
-        btnLogin.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btnLogin.setFont(ThemeManager.FONT_BOLD);
         btnLogin.setBackground(ThemeManager.getAccentColor());
         btnLogin.setForeground(Color.WHITE);
         btnLogin.setFocusPainted(false);
-        btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        btnLogin.setBorderPainted(false);
         btnLogin.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
-        btnLogin.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        // THAY BẰNG DÒNG NÀY (Để hiệu ứng đổi màu diễn ra mượt mà)
-        UIAnimator.addSmoothHover(btnLogin, ThemeManager.getAccentColor(), new Color(20, 90, 200));
-
-        mainPanel.add(btnLogin);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
+        UIAnimator.addSmoothHover(btnLogin, ThemeManager.getAccentColor(), ThemeManager.getAccentColor().darker());
 
         lblError = new JLabel(" ");
-        lblError.setForeground(new Color(255, 85, 85));
-        lblError.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblError.setForeground(new Color(239, 68, 68)); // Đỏ hiển thị lỗi rõ ràng
+        lblError.setFont(new Font("Segoe UI", Font.ITALIC, 13));
         lblError.setAlignmentX(Component.CENTER_ALIGNMENT);
-        mainPanel.add(lblError);
-
+        
         JLabel lblRegisterLink = new JLabel("<html><u>Chưa có tài khoản? Tạo mới ngay</u></html>");
-        lblRegisterLink.setForeground(new Color(150, 150, 150));
-        lblRegisterLink.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblRegisterLink.setForeground(ThemeManager.getSubTextColor());
+        lblRegisterLink.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblRegisterLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
         lblRegisterLink.setAlignmentX(Component.CENTER_ALIGNMENT);
-        mainPanel.add(lblRegisterLink);
-
-        add(mainPanel);
 
         lblRegisterLink.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { new RegisterFrame().setVisible(true); }
             @Override public void mouseEntered(MouseEvent e) { lblRegisterLink.setForeground(ThemeManager.getAccentColor()); }
-            @Override public void mouseExited(MouseEvent e) { lblRegisterLink.setForeground(new Color(150, 150, 150)); }
+            @Override public void mouseExited(MouseEvent e) { lblRegisterLink.setForeground(ThemeManager.getSubTextColor()); }
         });
 
         btnLogin.addActionListener(this::handleLogin);
-        // Cho phép nhấn Enter ở ô password để đăng nhập luôn, tiện khi test
         txtPassword.addActionListener(this::handleLogin);
 
+        mainPanel.add(lblTitle);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 35)));
+        mainPanel.add(createInputWrapper("Username:", txtUsername));
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        mainPanel.add(createInputWrapper("Password:", txtPassword));
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 25)));
+        mainPanel.add(btnLogin);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        mainPanel.add(lblError);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        mainPanel.add(lblRegisterLink);
+
+        add(mainPanel);
         setLocationRelativeTo(null);
     }
 
-    /**
-     * SỬA: Không còn giả lập "loginSuccess = true" ở Client nữa.
-     * Giờ gửi LOGIN|user|pass THẬT lên Server, qua ServerConnection
-     * (mở 1 Socket sống xuyên suốt session, dùng lại cho ChatGUI sau này).
-     * Dùng SwingWorker để không làm treo giao diện trong lúc chờ Server.
-     */
     private void handleLogin(ActionEvent e) {
         String user = txtUsername.getText().trim();
         String pass = new String(txtPassword.getPassword());
 
         if (user.isEmpty() || pass.isEmpty()) {
-            lblError.setText("⚠ Vui lòng nhập đầy đủ Username và Password!");
+            lblError.setText("⚠ Vui lòng điền đầy đủ tài khoản và mật khẩu.");
             return;
         }
 
         btnLogin.setEnabled(false);
-        lblError.setForeground(new Color(255, 85, 85));
-        lblError.setText("Đang kết nối tới Server...");
+        lblError.setForeground(ThemeManager.getAccentColor());
+        lblError.setText("Đang xác thực thông tin...");
         
         SwingWorker<String, Void> worker = new SwingWorker<>() {
             @Override
             protected String doInBackground() throws Exception {
                 try {
                     ServerConnection conn = ServerConnection.getInstance();
-                    
-                    conn.connect(); // mở Socket (nếu chưa có), giữ sống cho cả session
-
-                    String rawMessage = "LOGIN|" + user + "|" + pass;
-                    return conn.sendCommand(rawMessage); // ví dụ trả về "LOGIN_RESULT|OK"
-
-                } catch (java.net.ConnectException ce) {
-                    // Sửa nhẹ dòng thông báo lỗi cho gọn
-                    return "ERROR|Không thể kết nối tới Server. Vui lòng kiểm tra lại trạng thái Server hoặc IP!";
-                } catch (java.net.SocketTimeoutException te) {
-                    return "ERROR|Quá thời gian chờ phản hồi từ Server (Timeout).";
+                    conn.connect(); 
+                    return conn.sendCommand("LOGIN|" + user + "|" + pass);
                 } catch (Exception ex) {
-                    return "ERROR|Lỗi mạng hoặc giải mã: " + ex.getClass().getSimpleName() + " - " + ex.getMessage();
+                    return "ERROR|Không thể kết nối tới máy chủ.";
                 }
             }
 
@@ -151,69 +124,62 @@ public class LoginFrame extends JFrame {
                 btnLogin.setEnabled(true);
                 try {
                     String result = get();
-
                     if (result.startsWith("LOGIN_RESULT|OK")) {
                         lblError.setText(" ");
                         LoginFrame.this.dispose();
+                        // Chuyển tiếp Session an toàn, khởi tạo giao diện dựa trên định danh tài khoản mới
                         new ChatGUI(user).setVisible(true);
-
                     } else if (result.startsWith("LOGIN_RESULT|FAIL")) {
-                        lblError.setText("⚠ Sai tài khoản hoặc mật khẩu!");
-
-                    } else if (result.startsWith("ERROR|")) {
-                        lblError.setText("⚠ " + result.substring("ERROR|".length()));
-
+                        lblError.setForeground(new Color(239, 68, 68));
+                        lblError.setText("Sai tài khoản hoặc mật khẩu.");
                     } else {
-                        lblError.setText("⚠ Phản hồi không hợp lệ từ Server: " + result);
+                        lblError.setForeground(new Color(239, 68, 68));
+                        lblError.setText(result.contains("ERROR|") ? result.substring(6) : "Không thể kết nối tới máy chủ.");
                     }
                 } catch (Exception ex) {
-                    lblError.setText("⚠ Lỗi xử lý phản hồi: " + ex.getMessage());
+                    lblError.setForeground(new Color(239, 68, 68));
+                    lblError.setText("Không thể kết nối tới máy chủ.");
                 }
             }
         };
-
         worker.execute();
     }
 
-    // Hàm bọc giúp chữ và ô nhập luôn dính sát mép trái
-    private JPanel createInputWrapper(String labelText, JTextField txtField, Font f) {
-        JPanel panel = new JPanel(new BorderLayout(0, 5));
-        panel.setBackground(ThemeManager.getBgColor());
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60)); 
-
-        JLabel lbl = new JLabel(labelText);
-        lbl.setForeground(ThemeManager.getSubTextColor());
-        lbl.setFont(f);
-
-        panel.add(lbl, BorderLayout.NORTH);
-        panel.add(txtField, BorderLayout.CENTER);
-        panel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        return panel;
-    }
-
-    private void styleInput(JTextField txt, Font f) {
-        Border defaultBorder = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(ThemeManager.getSurfaceColor(), 2),
-            BorderFactory.createEmptyBorder(8, 10, 8, 10));
-        Border focusBorder = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(ThemeManager.getAccentColor(), 2),
-            BorderFactory.createEmptyBorder(8, 10, 8, 10));
-
+    private JTextField createFloatingInput() {
+        JTextField txt = new JTextField();
+        txt.setFont(ThemeManager.FONT_REGULAR);
         txt.setBackground(ThemeManager.getSurfaceColor());
         txt.setForeground(ThemeManager.getTextColor());
         txt.setCaretColor(ThemeManager.getTextColor());
-        txt.setFont(f);
-        txt.setBorder(defaultBorder);
+        txt.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(ThemeManager.getBorderColor(), 1),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
+        return txt;
+    }
 
-        txt.addFocusListener(new FocusAdapter() {
-            @Override public void focusGained(FocusEvent e) {
-                txt.setBorder(focusBorder);
-                txt.setBackground(ThemeManager.getBgColor()); // Tối đi khi click vào
-            }
-            @Override public void focusLost(FocusEvent e) {
-                txt.setBorder(defaultBorder);
-                txt.setBackground(ThemeManager.getSurfaceColor()); // Nổi lên khi nhả ra
-            }
-        });
+    private JPasswordField createFloatingPassword() {
+        JPasswordField txt = new JPasswordField();
+        txt.setFont(ThemeManager.FONT_REGULAR);
+        txt.setBackground(ThemeManager.getSurfaceColor());
+        txt.setForeground(ThemeManager.getTextColor());
+        txt.setCaretColor(ThemeManager.getTextColor());
+        txt.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(ThemeManager.getBorderColor(), 1),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
+        return txt;
+    }
+
+    private JPanel createInputWrapper(String label, JTextField txtField) {
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.setOpaque(false);
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
+        JLabel lbl = new JLabel(label);
+        lbl.setForeground(ThemeManager.getSubTextColor());
+        lbl.setFont(ThemeManager.FONT_REGULAR);
+        panel.add(lbl, BorderLayout.NORTH);
+        panel.add(txtField, BorderLayout.CENTER);
+        return panel;
     }
 }
