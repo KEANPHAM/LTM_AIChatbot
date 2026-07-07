@@ -481,14 +481,25 @@ public class ChatGUI extends JFrame {
         showTypingIndicator();
 
         SwingWorker<String, Void> worker = new SwingWorker<>() {
-            @Override
-            protected String doInBackground() throws Exception {
+           @Override
+                protected String doInBackground() throws Exception {
                 ServerConnection conn = ServerConnection.getInstance();
                 if (!conn.isConnected()) return "ERROR|Connection lost.";
-                String rawMessage = "CHAT|" + username + "|" + currentChatId + "|" + command;
+
+                String rawMessage;
+                String cmdUpper = command.toUpperCase();
+
+                // Kiểm tra xem người dùng có gõ các lệnh đặc biệt không
+                if (cmdUpper.startsWith("WEATHER|") || cmdUpper.startsWith("PORT|") || cmdUpper.startsWith("IP|")) {
+                    // Gửi nguyên gốc lệnh lên Server (VD: "weather|hà nội")
+                    rawMessage = command; 
+                } else {
+                    // Nếu là chat bình thường thì đóng gói theo định dạng CHAT
+                    rawMessage = "CHAT|" + username + "|" + currentChatId + "|" + command;
+                }
+
                 return conn.sendCommand(rawMessage);
             }
-
             @Override
             protected void done() {
                 hideTypingIndicator();
