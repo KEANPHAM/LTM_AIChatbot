@@ -11,16 +11,7 @@ import java.util.Properties;
 /**
  * ConfigLoader - Đọc các giá trị nhạy cảm (AES key, API key...) từ file
  * config.properties nằm NGOÀI source code, thay vì hardcode trong .java.
- *
- * File config.properties KHÔNG được commit lên Git (đã thêm vào .gitignore).
- * Chỉ commit file config.properties.example làm mẫu cho người khác biết
- * cần điền gì.
- *
- * Thứ tự ưu tiên đọc giá trị:
- *   1. Biến môi trường (Environment Variable) - ưu tiên cao nhất.
- *   2. File config.properties - tự dò qua NHIỀU vị trí khả thi, vì các
- *      IDE/launcher khác nhau (VS Code, NetBeans, java -jar, mvn exec)
- *      có thể chạy chương trình với "working directory" khác nhau.
+
  */
 public class ConfigLoader {
 

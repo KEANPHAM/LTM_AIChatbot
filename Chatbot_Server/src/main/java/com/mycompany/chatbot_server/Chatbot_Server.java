@@ -16,9 +16,7 @@ import org.json.JSONObject;
 
 public class Chatbot_Server {
     private static DatabaseHelper dbHelper = new DatabaseHelper();
-    // =========================================================
-    // 1. CÁC HÀM PHỤ TRỢ
-    // =========================================================
+  
     public static String getWeather(String city) {
         try {
             // SỬA: không hardcode key nữa, lấy qua ConfigLoader
@@ -75,7 +73,7 @@ public class Chatbot_Server {
                 openPorts.append(port).append(", ");
                 found = true;
             } catch (Exception e) {
-                // Port đang đóng, bỏ qua
+               
             }
         }
 
@@ -91,10 +89,7 @@ public class Chatbot_Server {
     // =========================================================
     public static String goiAI(String systemMessage, String userMessage) {
         try {
-            // SỬA: không hardcode key thật trong source nữa.
-            // Key cũ "gsk_...HNBB" đã bị lộ công khai trên GitHub -> PHẢI revoke
-            // (hủy) key đó trên console.groq.com và tạo key mới, rồi điền key
-            // mới vào config.properties / biến môi trường GROQ_API_KEY.
+          
             String apiKey = ConfigLoader.get(ConfigLoader.GROQ_API_KEY);
             URL url = new URL("https://api.groq.com/openai/v1/chat/completions");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -248,13 +243,18 @@ public class Chatbot_Server {
 
                                         new Thread(() -> {
                                             try {
+                                                // Chuẩn bị prompt:
                                                 String summaryPrompt = "Hãy tóm tắt ngắn gọn thành 1-2 câu chuỗi hội thoại sau. "
                                                         + "Ngữ cảnh cũ: [" + finalSummaryCu + "]. "
                                                         + "Người dùng hỏi: [" + cauHoi + "]. "
                                                         + "AI đáp: [" + finalTraLoi + "].";
 
+                                            //Gọi AI để tạo tóm tắt mới
                                                 String newSummary = goiAI("Bạn là chuyên gia tóm tắt dữ liệu.", summaryPrompt);
+                                            
+                                                //Cập nhật vào DB
                                                 dbHelper.updateSummary(finalLoggedInUser, newSummary);
+                                                
                                                 System.out.println("Da tom tat va luu DB ngam cho user: " + finalLoggedInUser);
                                             } catch (Exception e) {
                                                 System.err.println("Loi luong tom tat ngam cua " + finalLoggedInUser + ": " + e.getMessage());
@@ -382,9 +382,14 @@ public class Chatbot_Server {
                                 cauTraLoi = "Server khong hieu lenh nay!";
                             }
 
+                            
                             String phanHoiMaHoa = AESUtil.encrypt(cauTraLoi);
+                            
                             out.writeUTF(phanHoiMaHoa);
+                            
                             System.out.println("Da gui cau tra loi cho Client!");
+                            System.out.println("-------------------------------");
+                            
                         }
 
                     } catch (java.io.EOFException e) {

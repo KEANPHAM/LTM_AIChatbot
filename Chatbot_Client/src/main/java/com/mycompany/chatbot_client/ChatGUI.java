@@ -291,12 +291,10 @@ public class ChatGUI extends JFrame {
         mainArea = new JPanel(new BorderLayout());
         mainArea.setBackground(BG_COLOR);
 
-        // Thêm thanh công cụ phía trên để chứa nút Toggle
-       // Thêm thanh công cụ phía trên để chứa nút Toggle
+      
         JPanel topHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 12));
         topHeader.setBackground(BG_COLOR);
         
-        // Sử dụng biểu tượng ☰ (Hamburger menu)
         JButton btnToggleSidebar = new RoundedButton("->", RADIUS_SM);
         btnToggleSidebar.setFont(new Font("Segoe UI", Font.BOLD, 18)); // Tăng size font để biểu tượng to và rõ hơn
         btnToggleSidebar.setForeground(SUB_TEXT_COLOR);
@@ -397,7 +395,7 @@ public class ChatGUI extends JFrame {
         inputContainer.add(btnSend, BorderLayout.EAST);
         bottomWrapper.add(inputContainer, BorderLayout.CENTER);
 
-        lblStatus = new JLabel("Online"); // Bỏ icon ●
+        lblStatus = new JLabel("Online"); 
         lblStatus.setForeground(ONLINE_COLOR);
         lblStatus.setFont(FONT_SMALL);
         lblStatus.setBorder(new EmptyBorder(10, 6, 0, 0));
@@ -466,14 +464,14 @@ public class ChatGUI extends JFrame {
             scrollPane.setViewportView(alignPanel);
         }
     }
-
+//ham gui tin nhan cho server va nhan tra loi
     private void handleSendMessage() {
         String command = txtInput.getText().trim();
         if (command.isEmpty()) return;
 
         btnSend.setEnabled(false);
         txtInput.setEnabled(false);
-        lblStatus.setText("Typing..."); // Bỏ icon ●
+        lblStatus.setText("Typing...");
         lblStatus.setForeground(SUB_TEXT_COLOR);
 
         txtInput.setText("");
@@ -489,31 +487,34 @@ public class ChatGUI extends JFrame {
                 String rawMessage;
                 String cmdUpper = command.toUpperCase();
 
-                // Kiểm tra xem người dùng có gõ các lệnh đặc biệt không
                 if (cmdUpper.startsWith("WEATHER|") || cmdUpper.startsWith("PORT|") || cmdUpper.startsWith("IP|")) {
-                    // Gửi nguyên gốc lệnh lên Server (VD: "weather|hà nội")
                     rawMessage = command; 
                 } else {
-                    // Nếu là chat bình thường thì đóng gói theo định dạng CHAT
                     rawMessage = "CHAT|" + username + "|" + currentChatId + "|" + command;
                 }
-
+                System.out.println("Tin nhan gui di truoc khi ma hoa: " + rawMessage);
                 return conn.sendCommand(rawMessage);
             }
+            // Xử lý kết quả trả về từ server
             @Override
             protected void done() {
+                //loading
                 hideTypingIndicator();
                 btnSend.setEnabled(true);
                 txtInput.setEnabled(true);
-                lblStatus.setText("Online"); // Bỏ icon ●
+                lblStatus.setText("Online"); 
                 lblStatus.setForeground(ONLINE_COLOR);
                 txtInput.requestFocus();
 
                 try {
+                    //lay ket qua tra ve tu server
                     String response = get();
+                    System.out.println("Tin nhan nhan duoc sau khi giai ma: " + response);
+
                     if (response.startsWith("ERROR|")) {
                         appendMessage(currentChatId, "[Error] " + response.substring(6), false); // Bỏ icon ⚠
                     } else {
+                        //lenh hien thi tin nhan tra ve tu server
                         appendMessage(currentChatId, response, false);
                     }
                 } catch (Exception ex) {
@@ -676,7 +677,7 @@ public class ChatGUI extends JFrame {
             }
             @Override
             protected void done() {
-                lblStatus.setText("Online"); // Bỏ icon ●
+                lblStatus.setText("Online"); // 
                 lblStatus.setForeground(ONLINE_COLOR);
                 try {
                     String result = get();

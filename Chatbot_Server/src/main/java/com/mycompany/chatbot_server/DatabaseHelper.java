@@ -103,7 +103,7 @@ public String getAllHistoryText(String username) {
          Statement stmt = conn.createStatement()) {
         stmt.execute(createTableSQL);
         stmt.execute(createHistoryTableSQL); // Thực thi tạo bảng lịch sử
-        System.out.println("Kết nối Database thành công.");
+        System.out.println("Ket noi Database thanh cong.");
     } catch (SQLException e) {
         System.err.println("Lỗi khởi tạo Database: " + e.getMessage());
     }
@@ -168,8 +168,11 @@ public String getAllHistoryText(String username) {
             pstmt.setString(1, username);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
+
                     String storedHash = rs.getString("password_hash");
+                    System.out.println("Stored Hash: " + storedHash);
                     String inputHash = SecurityUtil.hashPassword(password);
+                    System.out.println("Input Hash: " + inputHash);
                     return storedHash.equals(inputHash);
                 }
             }

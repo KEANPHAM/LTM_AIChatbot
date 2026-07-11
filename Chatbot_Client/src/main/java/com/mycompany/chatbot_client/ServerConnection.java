@@ -61,7 +61,6 @@ public class ServerConnection {
     if (isConnected()) {
         return; 
     }
-    // SỬA CHỖ NÀY: Thay HOST (chữ in hoa) bằng thong số host động
     socket = new Socket(this.host, PORT);
     socket.setSoTimeout(TIMEOUT_MS);
     out = new DataOutputStream(socket.getOutputStream());
