@@ -2,24 +2,11 @@ package com.mycompany.chatbot_client;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 
 /**
- * ServerConnection - Quản lý DUY NHẤT 1 kết nối Socket tới Server,
- * dùng chung xuyên suốt cả session (từ lúc Login thành công cho tới khi
- * đăng xuất / đóng app).
- *
- * LÝ DO CẦN CLASS NÀY:
- * Server (Chatbot_Server) lưu trạng thái "đã đăng nhập hay chưa" bằng 1
- * biến local (loggedInUser) trong Thread xử lý của từng Socket. Biến đó
- * CHỈ tồn tại trong đúng Thread/Socket đó. Nếu Client mở Socket MỚI cho
- * mỗi lệnh (như cách cũ), Server sẽ luôn thấy "chưa đăng nhập" vì mỗi
- * Socket là 1 Thread hoàn toàn mới, không nhớ được lần Login trước.
- *
- * => Client phải giữ ĐÚNG 1 Socket từ lúc Login, dùng lại cho mọi lệnh
- * sau đó (CHAT|, WEATHER|, PORT|, IP|...).
- *
- * Singleton đơn giản: 1 instance duy nhất cho toàn bộ chương trình Client.
+ * Quản lý duy nhất một kết nối Socket tới Chatbot Server trong suốt phiên.
  */
 public class ServerConnection {
 
@@ -29,19 +16,14 @@ public class ServerConnection {
     private DataOutputStream out;
     private DataInputStream in;
 
-   private String host = "localhost";
-    private static final int PORT = 8888;
-    private static final int TIMEOUT_MS = 300000;
+    private String host = "localhost";
+    private int port = 8888;
 
-    public void setHost(String customHost) {
-    if (customHost != null && !customHost.trim().isEmpty()) {
-        this.host = customHost.trim();
-    } else {
-        this.host = "localhost"; // Nếu trống thì quay về mặc định
-    }
-}
+    private static final int CONNECT_TIMEOUT_MS = 10_000;
+    private static final int READ_TIMEOUT_MS = 300_000;
+
     private ServerConnection() {
-        // private constructor - chỉ tạo qua getInstance()
+        // Chỉ tạo thông qua getInstance().
     }
 
     public static synchronized ServerConnection getInstance() {
@@ -51,46 +33,130 @@ public class ServerConnection {
         return instance;
     }
 
-    /** Kiểm tra socket hiện tại còn sống và còn kết nối hay không. */
-    public boolean isConnected() {
-        return socket != null && socket.isConnected() && !socket.isClosed();
+    /**
+     * Thiết lập cả host và port trước khi gọi connect().
+     * Ví dụ LAN: localhost:8888.
+     * Ví dụ ngrok: 0.tcp.ap.ngrok.io:26674.
+     */
+    public synchronized void setEndpoint(String customHost, int customPort) {
+        if (customHost == null || customHost.trim().isEmpty()) {
+            customHost = "localhost";
+        }
+        if (customPort < 1 || customPort > 65535) {
+            throw new IllegalArgumentException("Port phải nằm trong khoảng 1-65535.");
+        }
+
+        String normalizedHost = customHost.trim();
+        if (normalizedHost.startsWith("tcp://")) {
+            normalizedHost = normalizedHost.substring("tcp://".length()).trim();
+        }
+
+        // Nếu endpoint thay đổi trong lúc đang kết nối, đóng kết nối cũ.
+        if (isConnected()
+                && (!this.host.equalsIgnoreCase(normalizedHost) || this.port != customPort)) {
+            disconnect();
+        }
+
+        this.host = normalizedHost;
+        this.port = customPort;
     }
 
-    /** Mở kết nối mới tới Server. Gọi 1 lần lúc Login. */
-    public synchronized void connect() throws Exception {
-    if (isConnected()) {
-        return; 
+    /** Giữ lại để tương thích với mã cũ chỉ gọi setHost(). */
+    public synchronized void setHost(String customHost) {
+        setEndpoint(customHost, this.port);
     }
-    socket = new Socket(this.host, PORT);
-    socket.setSoTimeout(TIMEOUT_MS);
-    out = new DataOutputStream(socket.getOutputStream());
-    in = new DataInputStream(socket.getInputStream());
-}
+
+    public synchronized void setPort(int customPort) {
+        setEndpoint(this.host, customPort);
+    }
+
+    public synchronized String getHost() {
+        return host;
+    }
+
+    public synchronized int getPort() {
+        return port;
+    }
+
+    /** Kiểm tra socket hiện tại còn sống và còn kết nối hay không. */
+    public synchronized boolean isConnected() {
+        return socket != null
+                && socket.isConnected()
+                && !socket.isClosed()
+                && !socket.isInputShutdown()
+                && !socket.isOutputShutdown();
+    }
+
+    /** Mở kết nối mới tới Server. Gọi một lần lúc đăng nhập. */
+    public synchronized void connect() throws Exception {
+        if (isConnected()) {
+            return;
+        }
+
+        disconnect();
+
+        Socket newSocket = new Socket();
+        try {
+            newSocket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
+            newSocket.setSoTimeout(READ_TIMEOUT_MS);
+
+            socket = newSocket;
+            out = new DataOutputStream(socket.getOutputStream());
+            in = new DataInputStream(socket.getInputStream());
+
+            System.out.println("Đã kết nối tới Server: " + host + ":" + port);
+        } catch (Exception ex) {
+            try {
+                newSocket.close();
+            } catch (Exception ignored) {
+                // Không cần xử lý thêm.
+            }
+            socket = null;
+            out = null;
+            in = null;
+            throw ex;
+        }
+    }
 
     /**
-     * Gửi 1 lệnh (đã ở dạng plaintext, ví dụ "CHAT|user|noi dung") lên Server,
-     * tự động mã hóa AES trước khi gửi, và giải mã phản hồi nhận về.
-     * Dùng chung cho LOGIN|, REGISTER|, CHAT|, WEATHER|, PORT|, IP|...
+     * Mã hóa lệnh bằng AES, gửi lên Server rồi giải mã phản hồi.
      */
     public synchronized String sendCommand(String rawMessage) throws Exception {
         if (!isConnected()) {
-            throw new java.net.SocketException("Chua ket noi toi Server. Goi connect() truoc.");
+            throw new java.net.SocketException(
+                    "Chưa kết nối tới Server. Hãy gọi connect() trước."
+            );
         }
+
         String encryptedMessage = AESUtil.encrypt(rawMessage);
         out.writeUTF(encryptedMessage);
+        out.flush();
 
         String encryptedResponse = in.readUTF();
         return AESUtil.decrypt(encryptedResponse);
     }
 
-    /** Đóng kết nối, gọi khi đăng xuất hoặc tắt chương trình. */
+    /** Đóng kết nối khi đăng xuất hoặc tắt chương trình. */
     public synchronized void disconnect() {
+        try {
+            if (in != null) {
+                in.close();
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            if (out != null) {
+                out.close();
+            }
+        } catch (Exception ignored) {
+        }
+
         try {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
             }
-        } catch (Exception e) {
-            // bỏ qua lỗi khi đóng
+        } catch (Exception ignored) {
         } finally {
             socket = null;
             out = null;
