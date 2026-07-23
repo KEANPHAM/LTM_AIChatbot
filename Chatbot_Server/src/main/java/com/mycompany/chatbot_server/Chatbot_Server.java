@@ -13,7 +13,7 @@ import java.net.URLEncoder;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-
+//./ngrok.exe tcp 8888
 public class Chatbot_Server {
     private static DatabaseHelper dbHelper = new DatabaseHelper();
   
@@ -72,8 +72,7 @@ public class Chatbot_Server {
 
                 openPorts.append(port).append(", ");
                 found = true;
-            } catch (Exception e) {
-               
+                } catch (Exception e) {
             }
         }
 
@@ -169,7 +168,7 @@ public class Chatbot_Server {
                         while (true) {
                             String messageTuClient = in.readUTF();
                             System.out.println("Server nhan duoc chuoi ma hoa: " + messageTuClient);
-
+                            //giai ma AES
                             String thongDiepThat = AESUtil.decrypt(messageTuClient);
                             System.out.println("Noi dung Client gui: " + thongDiepThat);
 
@@ -244,14 +243,34 @@ public class Chatbot_Server {
                                         new Thread(() -> {
                                             try {
                                                 // Chuẩn bị prompt:
-                                                String summaryPrompt = "Hãy tóm tắt ngắn gọn thành 1-2 câu chuỗi hội thoại sau. "
-                                                        + "Ngữ cảnh cũ: [" + finalSummaryCu + "]. "
-                                                        + "Người dùng hỏi: [" + cauHoi + "]. "
-                                                        + "AI đáp: [" + finalTraLoi + "].";
+                                                String summaryPrompt =
+                                                        "Hãy cập nhật bộ nhớ hội thoại theo các yêu cầu sau:\n"
+                                                        + "1. Giữ tất cả thông tin quan trọng.\n"
+                                                        + "2. Tóm tắt các nội dung lặp lại.\n"
+                                                        + "3. Lưu các quyết định cuối cùng thay vì toàn bộ quá trình suy nghĩ.\n"
+                                                        + "4. Giữ nguyên tên người, địa điểm, sản phẩm, dự án, mã nguồn, lỗi, "
+                                                        + "cấu hình và thông số kỹ thuật nếu có.\n"
+                                                        + "5. Nếu người dùng đang thực hiện một dự án, hãy ghi rõ tiến độ hiện tại.\n"
+                                                        + "6. Nếu AI đã đưa ra lời giải được người dùng chấp nhận thì lưu kết luận đó.\n"
+                                                        + "7. Không lưu lời chào, cảm ơn hoặc câu nói xã giao.\n"
+                                                        + "8. Không được bịa thêm thông tin.\n"
+                                                        + "9. Nếu thông tin cũ và mới mâu thuẫn thì cập nhật theo thông tin mới.\n\n"
+                                                        + "Bộ nhớ hiện tại:\n"
+                                                        + finalSummaryCu + "\n\n"
+                                                        + "Hội thoại mới:\n"
+                                                        + "Người dùng: " + cauHoi + "\n"
+                                                        + "AI: " + finalTraLoi + "\n\n"
+                                                        + "Xuất ra duy nhất bản tóm tắt mới, không giải thích, không tiêu đề.";
 
-                                            //Gọi AI để tạo tóm tắt mới
-                                                String newSummary = goiAI("Bạn là chuyên gia tóm tắt dữ liệu.", summaryPrompt);
-                                            
+                                                String newSummary = goiAI(
+                                                        "Bạn là Memory Manager của chatbot AI. "
+                                                        + "Bạn chịu trách nhiệm duy trì bộ nhớ dài hạn của cuộc hội thoại. "
+                                                        + "Hãy hợp nhất bộ nhớ cũ với thông tin mới, giữ lại mục tiêu, quyết định, "
+                                                        + "dự án, lỗi, cấu hình, các bước đã thực hiện và kết luận. "
+                                                        + "Không được bịa thêm thông tin. "
+                                                        + "Chỉ trả về bản tóm tắt đã cập nhật.",
+                                                        summaryPrompt
+                                                );
                                                 //Cập nhật vào DB
                                                 dbHelper.updateSummary(finalLoggedInUser, newSummary);
                                                 
@@ -382,7 +401,7 @@ public class Chatbot_Server {
                                 cauTraLoi = "Server khong hieu lenh nay!";
                             }
 
-                            
+                            //ma hoa AES
                             String phanHoiMaHoa = AESUtil.encrypt(cauTraLoi);
                             
                             out.writeUTF(phanHoiMaHoa);

@@ -24,3 +24,8 @@
 Thumbs.db
 *.log
 *.swp
+
+*.jar
+*.db
+ngrok.exe
+ngrok.zip
