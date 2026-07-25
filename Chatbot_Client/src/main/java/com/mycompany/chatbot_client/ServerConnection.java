@@ -226,7 +226,7 @@ public class ServerConnection {
             );
 
             System.out.println(
-                    "[SOCKET] Nhan phan hoi: " + response
+                    "[SOCKET] Da nhan phan hoi tu server."
             );
 
             return response;
