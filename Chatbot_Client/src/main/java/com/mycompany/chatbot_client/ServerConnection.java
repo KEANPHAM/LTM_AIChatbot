@@ -6,14 +6,18 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.security.KeyPair;
+
+import javax.crypto.SecretKey;
 
 /**
- * Quản lý duy nhất một kết nối Socket tới Chatbot Server.
+ * Quan ly mot ket noi Socket toi Chatbot Server.
  *
- * Hỗ trợ:
- * - localhost/LAN: localhost:8888
- * - ngrok TCP: 0.tcp.ap.ngrok.io:26674
- * - Chủ động kết nối lại khi Socket cũ bị treo hoặc tunnel ngrok thay đổi.
+ * Khi tao ket noi moi:
+ * 1. Client tao cap khoa RSA.
+ * 2. Client gui RSA Public Key cho Server.
+ * 3. Server sinh khoa AES rieng cho phien.
+ * 4. Client nhan va giai ma khoa AES bang RSA Private Key.
  */
 public class ServerConnection {
 
@@ -22,6 +26,7 @@ public class ServerConnection {
     private Socket socket;
     private DataOutputStream out;
     private DataInputStream in;
+    private SecretKey sessionKey;
 
     private String host = "localhost";
     private int port = 8888;
@@ -29,8 +34,10 @@ public class ServerConnection {
     private static final int CONNECT_TIMEOUT_MS = 10_000;
     private static final int READ_TIMEOUT_MS = 300_000;
 
+    private static final String KEY_EXCHANGE_PREFIX = "KEY_EXCHANGE|";
+    private static final String SESSION_KEY_PREFIX = "SESSION_KEY|";
+
     private ServerConnection() {
-        // Chỉ tạo thông qua getInstance().
     }
 
     public static synchronized ServerConnection getInstance() {
@@ -40,19 +47,15 @@ public class ServerConnection {
         return instance;
     }
 
-    /**
-     * Thiết lập host và port trước khi kết nối.
-     *
-     * Ví dụ:
-     * setEndpoint("localhost", 8888);
-     * setEndpoint("0.tcp.ap.ngrok.io", 26674);
-     */
-    public synchronized void setEndpoint(String customHost, int customPort) {
+    public synchronized void setEndpoint(
+            String customHost,
+            int customPort
+    ) {
         String normalizedHost = normalizeHost(customHost);
 
         if (customPort < 1 || customPort > 65535) {
             throw new IllegalArgumentException(
-                    "Port phải nằm trong khoảng từ 1 đến 65535."
+                    "Port phai nam trong khoang tu 1 den 65535."
             );
         }
 
@@ -68,9 +71,6 @@ public class ServerConnection {
         this.port = customPort;
     }
 
-    /**
-     * Giữ lại để tương thích với code cũ chỉ gọi setHost().
-     */
     public synchronized void setHost(String customHost) {
         setEndpoint(customHost, this.port);
     }
@@ -91,10 +91,6 @@ public class ServerConnection {
         return host + ":" + port;
     }
 
-    /**
-     * Socket.isConnected() chỉ cho biết Socket đã từng kết nối.
-     * Các điều kiện còn lại giúp loại bớt Socket đã đóng/shutdown.
-     */
     public synchronized boolean isConnected() {
         return socket != null
                 && socket.isConnected()
@@ -102,12 +98,10 @@ public class ServerConnection {
                 && !socket.isInputShutdown()
                 && !socket.isOutputShutdown()
                 && in != null
-                && out != null;
+                && out != null
+                && sessionKey != null;
     }
 
-    /**
-     * Kết nối tới Server nếu chưa có kết nối hiện tại.
-     */
     public synchronized void connect() throws IOException {
         if (isConnected()) {
             return;
@@ -116,20 +110,11 @@ public class ServerConnection {
         openNewConnection();
     }
 
-    /**
-     * Luôn đóng Socket cũ và tạo một kết nối mới.
-     *
-     * Dùng cho thao tác đăng ký để tránh trường hợp Socket cũ vẫn báo
-     * isConnected() nhưng tunnel ngrok hoặc phía Server đã ngắt.
-     */
     public synchronized void reconnect() throws IOException {
         disconnect();
         openNewConnection();
     }
 
-    /**
-     * Tạo kết nối TCP mới.
-     */
     private void openNewConnection() throws IOException {
         disconnect();
 
@@ -152,18 +137,19 @@ public class ServerConnection {
             out = new DataOutputStream(socket.getOutputStream());
             in = new DataInputStream(socket.getInputStream());
 
+            exchangeSessionKey();
+
             System.out.println(
-                    "[SOCKET] Da ket noi toi " + host + ":" + port
+                    "[SOCKET] Da ket noi va trao doi khoa AES voi "
+                            + host + ":" + port
             );
-        } catch (IOException ex) {
-            try {
-                newSocket.close();
-            } catch (IOException ignored) {
-            }
+        } catch (Exception ex) {
+            closeQuietly(newSocket);
 
             socket = null;
             out = null;
             in = null;
+            sessionKey = null;
 
             throw new IOException(
                     "Khong the ket noi toi " + host + ":" + port
@@ -174,16 +160,48 @@ public class ServerConnection {
     }
 
     /**
-     * Mã hóa lệnh bằng AES, gửi lên Server rồi giải mã phản hồi.
+     * Bat tay trao doi khoa truoc khi gui cac lenh LOGIN, REGISTER, CHAT...
      */
-    public synchronized String sendCommand(String rawMessage) throws Exception {
+    private void exchangeSessionKey() throws Exception {
+        KeyPair clientKeyPair = RSAUtil.generateKeyPair();
+
+        String publicKeyBase64 =
+                RSAUtil.publicKeyToBase64(clientKeyPair);
+
+        out.writeUTF(KEY_EXCHANGE_PREFIX + publicKeyBase64);
+        out.flush();
+
+        String response = in.readUTF();
+        if (!response.startsWith(SESSION_KEY_PREFIX)) {
+            throw new IOException(
+                    "Server khong tra ve khoa AES hop le."
+            );
+        }
+
+        String encryptedSessionKey = response.substring(
+                SESSION_KEY_PREFIX.length()
+        );
+
+        sessionKey = RSAUtil.decryptAESKey(
+                encryptedSessionKey,
+                clientKeyPair.getPrivate()
+        );
+    }
+
+    public synchronized String sendCommand(
+            String rawMessage
+    ) throws Exception {
+
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
-            throw new IllegalArgumentException("Lệnh gửi lên Server không được rỗng.");
+            throw new IllegalArgumentException(
+                    "Lenh gui len Server khong duoc rong."
+            );
         }
 
         if (!isConnected()) {
             throw new SocketException(
-                    "Chưa kết nối tới Server. Endpoint hiện tại: " + getEndpoint()
+                    "Chua ket noi toi Server. Endpoint hien tai: "
+                            + getEndpoint()
             );
         }
 
@@ -193,16 +211,22 @@ public class ServerConnection {
                             + " toi " + getEndpoint()
             );
 
-            String encryptedMessage = AESUtil.encrypt(rawMessage);
+            String encryptedMessage = AESUtil.encrypt(
+                    rawMessage,
+                    sessionKey
+            );
 
             out.writeUTF(encryptedMessage);
             out.flush();
 
             String encryptedResponse = in.readUTF();
-            String response = AESUtil.decrypt(encryptedResponse);
+            String response = AESUtil.decrypt(
+                    encryptedResponse,
+                    sessionKey
+            );
 
             System.out.println(
-                    "[SOCKET] "+ "Da nhan phan hoi tu server."
+                    "[SOCKET] Nhan phan hoi: " + response
             );
 
             return response;
@@ -210,27 +234,29 @@ public class ServerConnection {
             disconnect();
 
             throw new IOException(
-                    "Lỗi gửi/nhận dữ liệu với Server "
+                    "Loi gui/nhan du lieu voi Server "
                             + getEndpoint() + ": " + ex.getMessage(),
                     ex
             );
         }
     }
 
-    /**
-     * Đóng kết nối hiện tại.
-     */
     public synchronized void disconnect() {
-        if (socket != null) {
-            try {
-                socket.close();
-            } catch (IOException ignored) {
-            }
-        }
+        closeQuietly(socket);
 
         socket = null;
         out = null;
         in = null;
+        sessionKey = null;
+    }
+
+    private static void closeQuietly(Socket targetSocket) {
+        if (targetSocket != null) {
+            try {
+                targetSocket.close();
+            } catch (IOException ignored) {
+            }
+        }
     }
 
     private static String normalizeHost(String customHost) {
@@ -244,26 +270,22 @@ public class ServerConnection {
             normalized = normalized.substring(6).trim();
         }
 
-        // Nếu người dùng truyền nhầm host:port vào setHost(),
-        // chỉ lấy phần host. Port vẫn phải đặt bằng setPort/setEndpoint.
         int colonIndex = normalized.lastIndexOf(':');
-        if (colonIndex > 0 && normalized.indexOf(':') == colonIndex) {
+        if (colonIndex > 0
+                && normalized.indexOf(':') == colonIndex) {
+
             String possiblePort = normalized.substring(colonIndex + 1);
 
             try {
                 Integer.parseInt(possiblePort);
                 normalized = normalized.substring(0, colonIndex);
             } catch (NumberFormatException ignored) {
-                // Không phải dạng host:port, giữ nguyên.
             }
         }
 
         return normalized;
     }
 
-    /**
-     * Chỉ log tên lệnh, không log mật khẩu hoặc nội dung nhạy cảm.
-     */
     private static String commandName(String rawMessage) {
         int separatorIndex = rawMessage.indexOf('|');
 

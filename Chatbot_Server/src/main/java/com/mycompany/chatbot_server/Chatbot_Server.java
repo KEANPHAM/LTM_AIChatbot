@@ -10,10 +10,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.security.PublicKey;
+
+import javax.crypto.SecretKey;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-//./ngrok.exe tcp 8888
+
 public class Chatbot_Server {
     private static DatabaseHelper dbHelper = new DatabaseHelper();
   
@@ -72,7 +75,8 @@ public class Chatbot_Server {
 
                 openPorts.append(port).append(", ");
                 found = true;
-                } catch (Exception e) {
+            } catch (Exception e) {
+               
             }
         }
 
@@ -145,6 +149,42 @@ public class Chatbot_Server {
         }
     }
 
+    /**
+     * Nhan RSA Public Key cua Client, sinh khoa AES moi cho phien
+     * va gui khoa AES da duoc ma hoa RSA ve Client.
+     */
+    private static SecretKey exchangeSessionKey(
+            DataInputStream in,
+            DataOutputStream out
+    ) throws Exception {
+
+        String request = in.readUTF();
+        String prefix = "KEY_EXCHANGE|";
+
+        if (!request.startsWith(prefix)) {
+            throw new IllegalArgumentException(
+                    "Client khong gui yeu cau trao doi khoa hop le."
+            );
+        }
+
+        String publicKeyBase64 = request.substring(prefix.length());
+        PublicKey clientPublicKey =
+                RSAUtil.publicKeyFromBase64(publicKeyBase64);
+
+        SecretKey sessionKey = RSAUtil.generateAESKey();
+        String encryptedSessionKey =
+                RSAUtil.encryptAESKey(sessionKey, clientPublicKey);
+
+        out.writeUTF("SESSION_KEY|" + encryptedSessionKey);
+        out.flush();
+
+        System.out.println(
+                "Da sinh va trao doi khoa AES cho phien Client."
+        );
+
+        return sessionKey;
+    }
+
     // =========================================================
     // HÀM MAIN: KHỞI ĐỘNG SERVER & XỬ LÝ ĐA LUỒNG (MULTI-THREADING)
     // =========================================================
@@ -165,11 +205,13 @@ public class Chatbot_Server {
                         DataInputStream in = new DataInputStream(socket.getInputStream());
                         DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 
+                        SecretKey sessionKey = exchangeSessionKey(in, out);
+
                         while (true) {
                             String messageTuClient = in.readUTF();
                             System.out.println("Server nhan duoc chuoi ma hoa: " + messageTuClient);
-                            //giai ma AES
-                            String thongDiepThat = AESUtil.decrypt(messageTuClient);
+
+                            String thongDiepThat = AESUtil.decrypt(messageTuClient, sessionKey);
                             System.out.println("Noi dung Client gui: " + thongDiepThat);
 
                             String cauTraLoi = "";
@@ -401,8 +443,8 @@ public class Chatbot_Server {
                                 cauTraLoi = "Server khong hieu lenh nay!";
                             }
 
-                            //ma hoa AES
-                            String phanHoiMaHoa = AESUtil.encrypt(cauTraLoi);
+                            
+                            String phanHoiMaHoa = AESUtil.encrypt(cauTraLoi, sessionKey);
                             
                             out.writeUTF(phanHoiMaHoa);
                             
