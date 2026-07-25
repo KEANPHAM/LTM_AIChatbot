@@ -10,10 +10,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.security.PublicKey;
+
+import javax.crypto.SecretKey;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-//./ngrok.exe tcp 8888
+
 public class Chatbot_Server {
     private static DatabaseHelper dbHelper = new DatabaseHelper();
   
@@ -72,7 +75,8 @@ public class Chatbot_Server {
 
                 openPorts.append(port).append(", ");
                 found = true;
-                } catch (Exception e) {
+            } catch (Exception e) {
+               
             }
         }
 
@@ -145,6 +149,42 @@ public class Chatbot_Server {
         }
     }
 
+    /**
+     * Nhan RSA Public Key cua Client, sinh khoa AES moi cho phien
+     * va gui khoa AES da duoc ma hoa RSA ve Client.
+     */
+    private static SecretKey exchangeSessionKey(
+            DataInputStream in,
+            DataOutputStream out
+    ) throws Exception {
+
+        String request = in.readUTF();
+        String prefix = "KEY_EXCHANGE|";
+
+        if (!request.startsWith(prefix)) {
+            throw new IllegalArgumentException(
+                    "Client khong gui yeu cau trao doi khoa hop le."
+            );
+        }
+
+        String publicKeyBase64 = request.substring(prefix.length());
+        PublicKey clientPublicKey =
+                RSAUtil.publicKeyFromBase64(publicKeyBase64);
+
+        SecretKey sessionKey = RSAUtil.generateAESKey();
+        String encryptedSessionKey =
+                RSAUtil.encryptAESKey(sessionKey, clientPublicKey);
+
+        out.writeUTF("SESSION_KEY|" + encryptedSessionKey);
+        out.flush();
+
+        System.out.println(
+                "Da sinh va trao doi khoa AES cho phien Client."
+        );
+
+        return sessionKey;
+    }
+
     // =========================================================
     // HÀM MAIN: KHỞI ĐỘNG SERVER & XỬ LÝ ĐA LUỒNG (MULTI-THREADING)
     // =========================================================
@@ -165,11 +205,13 @@ public class Chatbot_Server {
                         DataInputStream in = new DataInputStream(socket.getInputStream());
                         DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 
+                        SecretKey sessionKey = exchangeSessionKey(in, out);
+
                         while (true) {
                             String messageTuClient = in.readUTF();
                             System.out.println("Server nhan duoc chuoi ma hoa: " + messageTuClient);
-                            //giai ma AES
-                            String thongDiepThat = AESUtil.decrypt(messageTuClient);
+
+                            String thongDiepThat = AESUtil.decrypt(messageTuClient, sessionKey);
                             System.out.println("Noi dung Client gui: " + thongDiepThat);
 
                             String cauTraLoi = "";
@@ -243,34 +285,14 @@ public class Chatbot_Server {
                                         new Thread(() -> {
                                             try {
                                                 // Chuẩn bị prompt:
-                                                String summaryPrompt =
-                                                        "Hãy cập nhật bộ nhớ hội thoại theo các yêu cầu sau:\n"
-                                                        + "1. Giữ tất cả thông tin quan trọng.\n"
-                                                        + "2. Tóm tắt các nội dung lặp lại.\n"
-                                                        + "3. Lưu các quyết định cuối cùng thay vì toàn bộ quá trình suy nghĩ.\n"
-                                                        + "4. Giữ nguyên tên người, địa điểm, sản phẩm, dự án, mã nguồn, lỗi, "
-                                                        + "cấu hình và thông số kỹ thuật nếu có.\n"
-                                                        + "5. Nếu người dùng đang thực hiện một dự án, hãy ghi rõ tiến độ hiện tại.\n"
-                                                        + "6. Nếu AI đã đưa ra lời giải được người dùng chấp nhận thì lưu kết luận đó.\n"
-                                                        + "7. Không lưu lời chào, cảm ơn hoặc câu nói xã giao.\n"
-                                                        + "8. Không được bịa thêm thông tin.\n"
-                                                        + "9. Nếu thông tin cũ và mới mâu thuẫn thì cập nhật theo thông tin mới.\n\n"
-                                                        + "Bộ nhớ hiện tại:\n"
-                                                        + finalSummaryCu + "\n\n"
-                                                        + "Hội thoại mới:\n"
-                                                        + "Người dùng: " + cauHoi + "\n"
-                                                        + "AI: " + finalTraLoi + "\n\n"
-                                                        + "Xuất ra duy nhất bản tóm tắt mới, không giải thích, không tiêu đề.";
+                                                String summaryPrompt = "Hãy tóm tắt ngắn gọn thành 1-2 câu chuỗi hội thoại sau. "
+                                                        + "Ngữ cảnh cũ: [" + finalSummaryCu + "]. "
+                                                        + "Người dùng hỏi: [" + cauHoi + "]. "
+                                                        + "AI đáp: [" + finalTraLoi + "].";
 
-                                                String newSummary = goiAI(
-                                                        "Bạn là Memory Manager của chatbot AI. "
-                                                        + "Bạn chịu trách nhiệm duy trì bộ nhớ dài hạn của cuộc hội thoại. "
-                                                        + "Hãy hợp nhất bộ nhớ cũ với thông tin mới, giữ lại mục tiêu, quyết định, "
-                                                        + "dự án, lỗi, cấu hình, các bước đã thực hiện và kết luận. "
-                                                        + "Không được bịa thêm thông tin. "
-                                                        + "Chỉ trả về bản tóm tắt đã cập nhật.",
-                                                        summaryPrompt
-                                                );
+                                            //Gọi AI để tạo tóm tắt mới
+                                                String newSummary = goiAI("Bạn là chuyên gia tóm tắt dữ liệu.", summaryPrompt);
+                                            
                                                 //Cập nhật vào DB
                                                 dbHelper.updateSummary(finalLoggedInUser, newSummary);
                                                 
@@ -401,8 +423,8 @@ public class Chatbot_Server {
                                 cauTraLoi = "Server khong hieu lenh nay!";
                             }
 
-                            //ma hoa AES
-                            String phanHoiMaHoa = AESUtil.encrypt(cauTraLoi);
+                            
+                            String phanHoiMaHoa = AESUtil.encrypt(cauTraLoi, sessionKey);
                             
                             out.writeUTF(phanHoiMaHoa);
                             
