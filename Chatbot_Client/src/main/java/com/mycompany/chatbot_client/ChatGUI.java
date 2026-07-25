@@ -477,7 +477,7 @@ public class ChatGUI extends JFrame {
         txtInput.setText("");
         appendMessage(currentChatId, command, true);
         showTypingIndicator();
-
+        //đóng gói tin nhắn 
         SwingWorker<String, Void> worker = new SwingWorker<>() {
            @Override
                 protected String doInBackground() throws Exception {
@@ -509,7 +509,7 @@ public class ChatGUI extends JFrame {
                 try {
                     //lay ket qua tra ve tu server
                     String response = get();
-                    System.out.println("Tin nhan nhan duoc sau khi giai ma: " + response);
+                    System.out.println("Da hien thi tin nhan tra ve tu server.");
 
                     if (response.startsWith("ERROR|")) {
                         appendMessage(currentChatId, "[Error] " + response.substring(6), false); // Bỏ icon ⚠
